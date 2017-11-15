@@ -64,12 +64,19 @@
     
   }
   
-  // Sketch object
+  // An object simulating a drawn sketch 
+  // Supports outline and fill animations
   function Sketch() {
     var
+      finishedSketching = false,
+      sketchColor = 'rgb(200, 200, 200)',
+      fillColor = 'rgb(0, 18, 51)',
+      callback = () => {},
       coords = [],
       fillBoxCoords = [],
-      drawCoords = [];
+      drawCoords = [],
+      opacity = 1;
+    
     
     function calculateDrawCoords() {
       var
@@ -80,6 +87,7 @@
         total,
         d;
       
+      finishedSketching = Date.now();
       drawCoords = [];
       
       for (let i = 0; i < coords.length; i++) {
@@ -101,6 +109,7 @@
         
             c[0] = coords[i].coords[j-1][0] + x;
             c[1] = coords[i].coords[j-1][1] + y;
+            finishedSketching = false;
           }
           
           newCoords.push(c);
@@ -109,6 +118,10 @@
         }
         
         drawCoords.push(newCoords);
+      }
+      
+      if (finishedSketching) {
+        callback();
       }
     }
     
@@ -133,11 +146,26 @@
         ctx.strokeStyle = opts.color;
         ctx.fillStyle = opts.color;
       }
-    
+      
+      ctx.globalAlpha = opacity;
       (opts && opts.useFill) ? ctx.fill() : ctx.stroke();
       ctx.closePath();
       ctx.restore();
     }
+    
+    this.setCallback = function(func) {
+      callback = func.bind(this);
+    }
+    
+    this.setSketchColor = function(color) {
+      sketchColor = color;
+    }
+    
+    this.setFillColor = function(color) {
+      fillColor = color;
+    }
+    
+    this.getSketchFinishTime = function() { return finishedSketching; }
     
     this.getCoords = function() { return coords; }
     
@@ -161,14 +189,10 @@
     this.popCoords = function() { coords.pop(); }
     
     this.update = function() {
-      var
-        t = Date.now();
-      
       for (let i = 0; i < coords.length; i++) {
-        if (t > coords[i].delay && coords[i].dist !== false) {
-          
+        if (Date.now() > coords[i].delay && coords[i].dist !== false) {
+        
           coords[i].dist += coords[i].speed / 100;
-          
           calculateDrawCoords();
         }
       }
@@ -177,8 +201,6 @@
     this.render = function(ctx) {
       var
         f = fillBoxCoords;
-      
-      //console.log(f);
       
       ctx.beginPath();
       
@@ -194,19 +216,43 @@
         ctx.lineTo(x1, y1);
         ctx.lineTo(x1, y0);
       }
-      ctx.fillStyle = '#001233';
-      ctx.globalAlpha = 1;
+      
+      ctx.fillStyle = fillColor;
+      ctx.globalAlpha = opacity;
       ctx.fill();
       ctx.closePath();
       
       
-      
       ctx.beginPath();
-      
-      drawPolygon({lineWidth:2, color:'#9e9e9e'});
-      
+      drawPolygon({lineWidth:4 * scale, color:sketchColor});
       ctx.closePath();
     }
+    
+  }
+  
+  function getColorMix(initColor, endColor, start, duration) {
+    var 
+      t = Date.now(),
+      color,
+      coef;
+    
+    if (!start) { return rgb(initColor); }
+    if (t - start > duration) { return rgb(endColor); }
+    
+    coef = Math.sin((Math.PI/2) * (t - start) / duration);
+    
+    color = [
+      initColor[0] + ((endColor[0] - initColor[0]) * coef),
+      initColor[1] + ((endColor[1] - initColor[1]) * coef),
+      initColor[2] + ((endColor[2] - initColor[2]) * coef)
+    ]
+    
+    return rgb(color);
+    
+    function rgb(c) {
+      return 'rgb(' + c.join(',') + ')';
+    }
+    
   }
   
   
@@ -301,6 +347,24 @@
         [x[2] - xt, y[0]],
         [x[1] + xt/2, y[0]]
       ]
+    });
+    
+    doodle.setCallback(function() {
+      var
+        duration = 1000,
+        t = Date.now();
+        
+      // Uses the Sketch object's context
+      this.update = function() {
+        this.setSketchColor(getColorMix([200, 200, 200], [39,87,170], t, duration));
+        this.setFillColor(getColorMix([0,18,51], [39,87,170], t, duration));
+        
+        if (Date.now() > t + duration) {
+          this.update = () => {};
+        }
+      }
+        
+      
     });
     
     doodles.push(doodle);

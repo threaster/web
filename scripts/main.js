@@ -75,7 +75,10 @@
       coords = [],
       fillBoxCoords = [],
       drawCoords = [],
-      opacity = 1;
+      translate = false,
+      scale = false,
+      rotate = false,
+      com = [0, 0];
     
     
     function calculateDrawCoords() {
@@ -131,27 +134,33 @@
       ctx.beginPath();
       for (let i = 0; i < drawCoords.length; i++) {
         
-        ctx.moveTo((drawCoords[i][0][0] * dim.w) + dim.x, (drawCoords[i][0][1] * dim.h) + dim.y);
+        ctx.moveTo((drawCoords[i][0][0] * dim.w), (drawCoords[i][0][1] * dim.h));
         for (let j = 1; j < drawCoords[i].length; j++) {
           let
-            x = drawCoords[i][j][0] * dim.w + dim.x,
-            y = drawCoords[i][j][1] * dim.h + dim.y;
+            x = drawCoords[i][j][0] * dim.w,
+            y = drawCoords[i][j][1] * dim.h;
             
           ctx.lineTo(x, y);
         }
       }
-    
-      if (opts && opts.lineWidth) { ctx.lineWidth = opts.lineWidth; }
-      if (opts && opts.color) {
-        ctx.strokeStyle = opts.color;
-        ctx.fillStyle = opts.color;
+      
+      if (opts) {
+        if (opts.lineWidth) { ctx.lineWidth = opts.lineWidth; }
+        if (opts.color) {
+          ctx.strokeStyle = opts.color;
+          ctx.fillStyle = opts.color;
+        }
       }
       
-      ctx.globalAlpha = opacity;
+      ctx.globalAlpha = 1;
       (opts && opts.useFill) ? ctx.fill() : ctx.stroke();
       ctx.closePath();
       ctx.restore();
     }
+    
+    this.getSketchFinishTime = function() { return finishedSketching; }
+    
+    this.getCoords = function() { return coords; }
     
     this.setCallback = function(func) {
       callback = func.bind(this);
@@ -165,10 +174,6 @@
       fillColor = color;
     }
     
-    this.getSketchFinishTime = function() { return finishedSketching; }
-    
-    this.getCoords = function() { return coords; }
-    
     this.setFillBoxCoords = function(coordinates) {
       fillBoxCoords = coordinates;
     }
@@ -177,6 +182,22 @@
       for (let i = 0; i < coordinates.length; i++) { 
         this.appendCoords(coordinates[i]);
       }
+    }
+    
+    this.setScale = function(x, y) {
+      scale = [x, y];
+    }
+    
+    this.setCenterOfMass = function(x, y) {
+      com = [x, y];
+    }
+    
+    this.setTranslate = function(x, y) {
+      translate = [x, y];
+    }
+    
+    this.setRotate = function(a) {
+      rotate = a;
     }
     
     this.appendCoords = function(coordinates) {
@@ -202,14 +223,33 @@
       var
         f = fillBoxCoords;
       
+      ctx.save();
       ctx.beginPath();
+      
+      
+      if (com) {
+        ctx.translate(com[0], com[1]);
+      }
+      
+      if (translate) {
+        ctx.translate(translate[0], translate[1]);
+      }
+      
+      if (rotate) {
+        ctx.rotate(rotate);
+      }
+      
+      if (scale) {
+        ctx.scale(scale[0], scale[1]);
+      }
+      
       
       for (let i = 0; i < f.length; i++) {
         let
-          x0 = f[i][0] * dim.w + dim.x,
-          x1 = f[i][2] * dim.w + dim.x,
-          y0 = f[i][1] * dim.h + dim.y,
-          y1 = f[i][3] * dim.h + dim.y;
+          x0 = f[i][0] * dim.w,
+          x1 = f[i][2] * dim.w,
+          y0 = f[i][1] * dim.h,
+          y1 = f[i][3] * dim.h;
         
         ctx.moveTo(x0, y0);
         ctx.lineTo(x0, y1);
@@ -218,7 +258,7 @@
       }
       
       ctx.fillStyle = fillColor;
-      ctx.globalAlpha = opacity;
+      ctx.globalAlpha = 1;
       ctx.fill();
       ctx.closePath();
       
@@ -226,6 +266,7 @@
       ctx.beginPath();
       drawPolygon({lineWidth:4 * scale, color:sketchColor});
       ctx.closePath();
+      ctx.restore();
     }
     
   }
@@ -242,9 +283,9 @@
     coef = Math.sin((Math.PI/2) * (t - start) / duration);
     
     color = [
-      initColor[0] + ((endColor[0] - initColor[0]) * coef),
-      initColor[1] + ((endColor[1] - initColor[1]) * coef),
-      initColor[2] + ((endColor[2] - initColor[2]) * coef)
+      Math.round(initColor[0] + ((endColor[0] - initColor[0]) * coef)),
+      Math.round(initColor[1] + ((endColor[1] - initColor[1]) * coef)),
+      Math.round(initColor[2] + ((endColor[2] - initColor[2]) * coef))
     ]
     
     return rgb(color);
@@ -289,20 +330,23 @@
   
   function initDoodles() {
     var
-      y = [.33, .67],
-      x = [.33, .5, .67],
+      //y = [.33, .67],
+      //x = [.33, .5, .67],
+      y = [-0.17,  0.17],
+      x = [-0.17, 0, 0.17],
       xt = .05,
       yt = xt * ASPECT,
       doodle = new Sketch();
     
     doodle.setFillBoxCoords([
       [x[0] - xt, y[0] - yt, x[2] + xt, y[0]],
-      [x[0] - xt, y[1] + yt, x[2] + xt, y[1]],
-      [x[0], y[0], x[0] + xt, y[1]],
-      [x[1] - xt/2, y[0], x[1] + xt/2, y[1]],
-      [x[2] - xt, y[0], x[2], y[1]]
+      [x[0] - xt, y[1], x[2] + xt, y[1] + yt],
+      [x[0], y[0] - yt, x[0] + xt, y[1] + yt],
+      [x[1] - xt/2, y[0] - yt, x[1] + xt/2, y[1] + yt],
+      [x[2] - xt, y[0] - yt, x[2], y[1] + yt]
     ]);
     
+    // Outer trace
     doodle.appendCoords({
       speed  : 2,
       delay  : 1000,
@@ -323,7 +367,7 @@
       ]
     });
     
-    
+    // Left inner trace
     doodle.appendCoords({
       speed  : .95,
       delay  : 1500,
@@ -336,7 +380,7 @@
       ]
     });
     
-    
+    // Right inner trace
     doodle.appendCoords({
       speed  : 1.2,
       delay  : 2200,
@@ -349,25 +393,36 @@
       ]
     });
     
+    
+    doodle.setCenterOfMass(dim.x + dim.w/2, dim.y + dim.h/2);
+    
     doodle.setCallback(function() {
       var
         duration = 1000,
         t = Date.now();
-        
+      
       // Uses the Sketch object's context
       this.update = function() {
+        var
+          scale = (1 - (Date.now() - t - duration)/duration) * .5;
+        
         this.setSketchColor(getColorMix([200, 200, 200], [39,87,170], t, duration));
         this.setFillColor(getColorMix([0,18,51], [39,87,170], t, duration));
         
+        
         if (Date.now() > t + duration) {
-          this.update = () => {};
+          this.update = transformSketch.bind(this);
         }
       }
-        
-      
     });
     
     doodles.push(doodle);
+  }
+  
+  function transformSketch() {
+    //this.setTranslate(50 * Math.sin(Date.now() / 500), 50 * Math.cos(Date.now() / 500));
+    //this.setRotate(.2 * Math.sin(Date.now() / 1000));
+    
   }
   
   function sizeCanvas() {
@@ -397,6 +452,10 @@
       h: h,
       x: x,
       y: y
+    }
+    
+    for (let i = 0; i < doodles.length; i++) {
+      doodles[i].setCenterOfMass(dim.x + dim.w/2, dim.y + dim.h/2);
     }
     
     scale = Math.min(canvas.width/2100, canvas.height/1100);

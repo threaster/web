@@ -16,11 +16,83 @@
     about,
     portfolio;
   
+  function ColorTransition(rgbInitial, rgbFinal, step) {
+    var
+      c        = {},
+      active   = false,
+      deactive = false,
+      duration = 150;
+    
+    c.initial = rgbInitial;
+    c.current = rgbInitial;
+    c.final   = rgbFinal;  
+    
+    this.activate = function() {
+      active   = true;
+      deactive = false;
+    }
+    
+    this.deactivate = function() {
+      deactive = true;
+      active   = false;
+    }
+    
+    this.update = function() {
+      var
+        rgbStart,
+        rgbEnd;
+        
+      if (active) {
+        rgbStart = c.initial
+        rgbEnd   = c.final;
+      }
+      if (deactive) {
+        rgbStart = c.final;
+        rgbEnd   = c.initial;
+      }
+      
+      if (active || deactive) {
+        c.current = {
+          r: adjustColor(c.current.r, rgbStart.r, rgbEnd.r),
+          g: adjustColor(c.current.g, rgbStart.g, rgbEnd.g),
+          b: adjustColor(c.current.b, rgbStart.b, rgbEnd.b)
+        }
+        
+        if (c.current.r === rgbEnd.r
+        && c.current.g === rgbEnd.g
+        && c.current.b === rgbEnd.b) {
+          active   = false;
+          deactive = false;
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    this.getColor = function() {
+      return 'rgb(' + c.current.r + ',' + c.current.g + ',' + c.current.b + ')';
+    }
+    
+    
+    function adjustColor(current, initial, final) {
+      var
+        adjusted = current + (final - initial) * (step / duration),
+        color;
+      
+      color = (initial > final) ? Math.max(final, adjusted) : Math.min(final, adjusted);
+      
+      return color;
+    }
+  }
+  
   function Element() {
     var
       loc = {x:0,y:0},
       origin = {x:0,y:0},
-      dimensions = {x:0,y:0,w:0,h:0};
+      dimensions = {x:0,y:0,w:0,h:0},
+      opacity = 1,
+      updateList = [];
       
     this.isMarkedForDeletion = false;
     
@@ -46,6 +118,46 @@
     
     this.getLayerDimensions = function() {
       return dimensions;
+    }
+    
+    this.setOpacity = function(o) {
+      opacity = o;
+    }
+    
+    this.getOpacity = function() {
+      return opacity;
+    }
+    
+    this.addUpdate = function(func) {
+      updateList.push(func.bind(this));
+    }
+    
+    this.clearUpdates = function() {
+      updateList = [];
+    }
+    
+    this.update = function() {
+      let
+        rmq = [];
+      
+      updateList.forEach(function(func, ind) {
+        if (func()) {
+          rmq.push(ind);
+        }
+      });
+      
+      if (rmq.length > 0) {
+        rmq.sort((a, b) => {
+          if (a > b) { return 1; }
+          if (a < b) { return -1; }
+          
+          return 0;
+        });
+        
+        for (let i = 0; i < rmq.length ; i++) {
+          updateList.splice(rmq[i], 1);
+        }
+      }
     }
   }
   
@@ -93,15 +205,26 @@
     
     
     this.hover = function(moveX, moveY) {
+      
       if (!isHovering && isWithinBounds(moveX, moveY)) {
         mouseover();
         isHovering = true;
+        this.startHover();
       }
       
       if (isHovering && !isWithinBounds(moveX, moveY)) {
         mouseout();
         isHovering = false;
+        this.endHover();
       }
+    }
+    
+    this.startHover = function() {
+      
+    }
+    
+    this.endHover = function() {
+      
     }
     
     
@@ -123,10 +246,9 @@
     
   }
   
-  function Link(ctx) {
+  function Link(ctx, step) {
     var
-      a = 0,
-      o = 'rgb(39,87,170)',
+      o = new ColorTransition({r:39,g:87,b:170}, {r:232,g:208,b:88}, step),
       c = 'rgb(255,255,255)',
       s,
       f,
@@ -136,6 +258,11 @@
       baseline = '';
     
     Hitbox.call(this);
+    
+    this.setOpacity(0);
+    this.addUpdate(function() {
+      o.update();
+    });
     
     function getRealX(x, w, align, layer) {
       var
@@ -232,41 +359,39 @@
       this.setHitboxCoords();
     }
     
-    this.update = function() {
-      a += .01;
-      
-      if (a > 1) {
-        a = 1;
-        this.update = function() {};
-      }
+    this.startHover = function() {
+      o.activate();
+    }
+    
+    this.endHover = function() {
+      o.deactivate();
     }
     
     this.render = function() {
       var
-        x,
-        y,
-        w = getWidth(ctx, t, f),
         layer = this.getLayerDimensions(),
-        origin = this.getOrigin();
+        origin = this.getOrigin(),
+        w = getWidth(ctx, t, f),
+        x = getRealX(origin.x, w, align, layer),
+        y = getRealY(origin.y, s, baseline, layer);
       
       ctx.save();
-      
-      x = getRealX(origin.x, w, align, layer);
-      y = getRealY(origin.y, s, baseline, layer);
-      
       ctx.translate(x, y);
       
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = this.getOpacity();
       ctx.textBaseline = 'top';
       ctx.textAlign = 'left';
       ctx.lineJoin = 'round';
       ctx.font = f;
+      
       ctx.lineWidth = 6;
-      ctx.strokeStyle = o;
+      ctx.strokeStyle = o.getColor();
       ctx.strokeText(t, 0, 0);
+      
       ctx.lineWidth = 1;
       ctx.fillStyle = c;
       ctx.fillText(t, 0, 0);
+      
       ctx.restore();
     }
     
@@ -281,13 +406,25 @@
       r,
       c = 'white',
       v = 2,
-      d = 1;
+      d = 3 * Math.PI / 4;
     
     Element.call(this);
     
-    this.setDirection = function(direction) { d = direction; }
+    this.setDirection = function(direction) {
+      var
+        pi2 = Math.PI * 2;
+      
+      while (direction > pi2) { direction -= pi2; }
+      while (direction < 0) { direction += pi2; }
+      
+      d = direction;
+    }
     
-    this.setVelocity = function(velocity) { v = velocity/20; }
+    this.getDirection = function() { return d; }
+    
+    this.setVelocity = function(velocity) { v = velocity; }
+    
+    this.getVelocity = function() { return v; }
     
     this.setColor = function(color) { c = color; }
     
@@ -299,19 +436,12 @@
     }
     
     
-    this.update = function() {
+    this.addUpdate(function() {
       var
         origin = this.getOrigin();
         
-      origin.x -= v * UPDATE_STEP_MS / 1000;
-      origin.y -= v * d * UPDATE_STEP_MS / 1000;
-      
-      /*
-      if (origin.x < -10 || origin.y < -10
-      || origin.x > ctx.canvas.width + 10 || origin.y > ctx.canvas.height + 10) { 
-        //this.isMarkedForDeletion = true;
-      }
-      */
+      origin.x += v * Math.cos(d) * UPDATE_STEP_MS;
+      origin.y -= v * Math.sin(d) * UPDATE_STEP_MS;
       
       if (origin.x < -.1) {
         origin.x = 1.1;
@@ -331,7 +461,7 @@
       
       
       this.setOrigin(origin.x, origin.y);
-    }
+    });
     
     this.render = function() {
       var
@@ -350,21 +480,12 @@
         ctx.closePath();
       }
       
-      
       ctx.restore();
-      
-      /*
-      ctx.save();
-      ctx.strokeStyle = 'white';
-      ctx.strokeText(origin.x, 10, 10);
-      ctx.restore();
-      */
     }
     
   }
   
-  // An object simulating a drawn sketch 
-  // Supports outline and fill animations
+  // An object simulating a drawn sketch
   function Sketch() {
     var
       finishedSketching = false,
@@ -379,6 +500,22 @@
       rotate = false;
     
     Element.call(this);
+    
+    this.addUpdate(function() {
+      for (let i = 0; i < coords.length; i++) {
+        if (Date.now() > coords[i].delay && coords[i].dist !== false) {
+        
+          coords[i].dist += coords[i].speed * UPDATE_STEP_MS / 1000;
+          calculateDrawCoords();
+          
+          if (finishedSketching) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    });
     
     function calculateDrawCoords() {
       var
@@ -427,7 +564,7 @@
       }
     }
     
-    function drawPolygon(opts, dimensions) {
+    function drawPolygon(opts, dimensions, opacity) {
       ctx.save();
       ctx.beginPath();
       for (let i = 0; i < drawCoords.length; i++) {
@@ -450,7 +587,7 @@
         }
       }
       
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = opacity;
       (opts && opts.useFill) ? ctx.fill() : ctx.stroke();
       ctx.closePath();
       ctx.restore();
@@ -503,16 +640,6 @@
     
     this.popCoords = function() { coords.pop(); }
     
-    this.update = function() {
-      for (let i = 0; i < coords.length; i++) {
-        if (Date.now() > coords[i].delay && coords[i].dist !== false) {
-        
-          coords[i].dist += coords[i].speed * UPDATE_STEP_MS / 1000;
-          calculateDrawCoords();
-        }
-      }
-    }
-    
     this.render = function(ctx) {
       var
         f = fillBoxCoords,
@@ -522,7 +649,7 @@
       ctx.save();
       ctx.beginPath();
       
-      ctx.translate(layer.x + layer.w/2, layer.y + layer.h/2);
+      ctx.translate(layer.x + layer.w * origin.x, layer.y + layer.h * origin.y);
       
       if (translate) {
         ctx.translate(translate[0], translate[1]);
@@ -551,13 +678,13 @@
       }
       
       ctx.fillStyle = fillColor;
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = this.getOpacity();
       ctx.fill();
       ctx.closePath();
       
       
       ctx.beginPath();
-      drawPolygon({lineWidth:4 * scale, color:sketchColor}, layer);
+      drawPolygon({lineWidth:4 * scale, color:sketchColor}, layer, this.getOpacity());
       ctx.closePath();
       ctx.restore();
     }
@@ -590,7 +717,53 @@
   }
   
   function initAbout() {
-    console.log('initAbout');
+    
+    renderLayer1.forEach(function(object) {
+      object.clearUpdates();
+      
+      object.addUpdate(function() {
+        var
+          o = Math.max(this.getOpacity() - (.002 * UPDATE_STEP_MS), 0);
+          
+        this.setOpacity(o);
+        
+        return (o === 0) ? true : false;
+      });
+    });
+    
+    renderLayer2.forEach(function(object) {
+      //object.clearUpdates();
+      var
+        dd = 2 * (Math.round(Math.random()) - .5 ); 
+      
+      object.addUpdate(function() {
+        var
+          origin = this.getOrigin(),
+          vel = this.getVelocity(),
+          dx = .5 - origin.x,
+          dy = origin.y - .5,
+          a = Math.atan(dy/dx),
+          dist2 = dx * dx + dy * dy,
+          turnSpeed = UPDATE_STEP_MS * Math.PI / 50;
+        
+        // Stop moving
+        if (dist2 < .00005) {
+          this.setOrigin(.5, .5);
+          this.clearUpdates();
+          return;
+        }
+        
+        if (dx < 0) { a += Math.PI; }
+        
+        this.setDirection(a);
+        
+        if (vel < .0007) {
+          vel += UPDATE_STEP_MS * (.0007 - vel) / 1000;
+          this.setVelocity(vel);
+        } 
+      });
+    });
+    
   }
   
   
@@ -605,30 +778,34 @@
   }
   
   function initLinks() {
-    about = new Link(ctx);
+    about = new Link(ctx, UPDATE_STEP_MS);
     about.setBaseline('top');
     about.setAlign('left');
-    about.setOrigin(.26, .8);
+    about.setOrigin(.26, .71);
     about.setText('About Me');
     about.setAction(initAbout);
-    about.setHover(function() {
-      this.setOutline('red');
-    });
-    about.setMouseout(function() {
-      this.setOutline('green');
+    about.addUpdate(function() {
+      var
+        opacity = Math.min(this.getOpacity() + .001 * UPDATE_STEP_MS, 1);
+      
+      this.setOpacity(opacity);
+      
+      return (opacity === 1) ? true : false;
     });
     
-    portfolio = new Link(ctx);
+    portfolio = new Link(ctx, UPDATE_STEP_MS);
     portfolio.setBaseline('top');
     portfolio.setAlign('right');
-    portfolio.setOrigin(.74, .8);
+    portfolio.setOrigin(.74, .71);
     portfolio.setText('Portfolio');
     portfolio.setAction(initAbout);
-    portfolio.setHover(function() {
-      this.setOutline('orange');
-    });
-    portfolio.setMouseout(function() {
-      this.setOutline('purple');
+    portfolio.addUpdate(function() {
+      var
+        opacity = Math.min(this.getOpacity() + .01, 1);
+        
+      this.setOpacity(opacity);
+      
+      return (opacity === 1) ? true : false;
     });
   }
   
@@ -647,21 +824,18 @@
       y = posY || Math.random() * 1.2 - .1,
       r = Math.round(Math.random() * 8) + 3,
       v = Math.random() * 4 + 1,
-      d = Math.random() * 0.5 - 1,
       star = new Star(ctx);
         
       star.setOrigin(x, y);
       star.setLocation(x, y);
       star.setRadius(r);
-      star.setVelocity(v / 10);
+      star.setVelocity(v / 100000);
     
     return star;
   }
   
   function initDoodles() {
     var
-      //y = [.33, .67],
-      //x = [.33, .5, .67],
       y = [-0.17,  0.17],
       x = [-0.17, 0, 0.17],
       xt = .05,
@@ -724,7 +898,7 @@
     });
     
     
-    doodle.setLocation(.5, .45);
+    doodle.setOrigin(.5, .40);
     //doodle.setOrigin(dim.x + dim.w * .5, dim.y + dim.h * .45);
     
     doodle.setCallback(function() {
@@ -734,6 +908,42 @@
         t = Date.now();
       
       // Uses the Sketch object's context
+      
+      this.addUpdate(function() {
+        // Fade in effect
+        this.setSketchColor(getColorMix([200, 200, 200], [39,87,170], t, duration));
+        this.setFillColor(getColorMix([0,18,51], [39,87,170], t, duration));
+        
+        
+        if (Date.now() > t + duration) {
+          t = Date.now();
+          this.addUpdate(function() {
+            
+            // Grow effect
+            duration = 700;
+            scale = 1;
+            scale += .1 * Math.sin((Math.PI / 2) * (Date.now() - t) / duration);
+            this.setScale(scale, scale);
+            
+            if (Date.now() > t + duration) {
+              // Finished animating
+              initLinks();
+              resize();
+              renderLayer1.push(about);
+              renderLayer1.push(portfolio);
+              return true;
+            }
+            
+            return false;
+          });
+          
+          return true;
+        }
+        
+        return false;
+      });
+    });
+      /*
       this.update = function() {
         
         // Fade in effect
@@ -762,8 +972,7 @@
           }
         }
       }
-    });
-    
+      */
     renderLayer1.push(doodle);
   }
   
@@ -789,6 +998,9 @@
     canvas.height = window.innerHeight;
     
     scale = Math.min(canvas.width/2100, canvas.height/1100);
+    if (navigator.userAgent.toLowerCase().indexOf('mobi') !== -1) {
+      scale = Math.min(scale * 2, .7);
+    }
     
     // Calculate layer1 drawing space dimensions
     if (window.innerWidth > ASPECT * window.innerHeight) {
@@ -802,7 +1014,6 @@
     x = (canvas.width - w) / 2;
     y = (canvas.height - h) / 2;
     
-    // Cache dimensions
     dim = {
       w: w,
       h: h,

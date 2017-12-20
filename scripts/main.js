@@ -82,7 +82,7 @@
       
       color = (initial > final) ? Math.max(final, adjusted) : Math.min(final, adjusted);
       
-      return color;
+      return parseInt(color);
     }
   }
   
@@ -181,6 +181,8 @@
       if (width) { w = width; }
       if (height) { h = height; }
     }
+    
+    
     
     this.getCoords = function() {
       return {
@@ -430,6 +432,8 @@
     
     this.setRadius = function(radius) { r = radius; }
     
+    this.getRadius = function() { return r; }
+    
     this.setCoords = function(coordX, coordY) {
       x = coordX/100;
       y = coordY/100;
@@ -479,6 +483,67 @@
         ctx.fill();
         ctx.closePath();
       }
+      
+      ctx.restore();
+    }
+    
+  }
+  
+  function Item(ctx) {
+    var
+      r = 20,
+      i = new Image(),
+      color = {};
+    
+    color.rest = {
+      background: 'rgba(225,225,225,.5)',
+      outline: 'red'
+    }
+    color.hover = {
+      background: 'rgba(235, 100, 100, .5)',
+      outline: 'blue'
+    }
+    
+    Hitbox.call(this);
+    
+    this.setRadius = function(radius) {
+      r = radius;
+    }
+    
+    this.getRadius = function() { return r; }
+    
+    this.setSource = function(source) {
+      i.src = source;
+    }
+    
+    this.render = function() {
+      var
+        o = this.getOrigin(),
+        d = this.getLayerDimensions(),
+        sr = -.8 * r;
+      
+      ctx.save();
+      
+      ctx.translate(o.x, o.y);
+      
+      ctx.fillStyle = color.rest.background;
+      ctx.strokeStyle = color.rest.outline;
+      ctx.lineWidth = 3;
+      
+      // Background
+      ctx.beginPath();
+      ctx.arc(d.x + d.w/2, d.y + d.h/2, r, 0, 2 * Math.PI, true);
+      ctx.fill();
+      ctx.closePath();
+      
+      // Outline
+      ctx.beginPath();
+      ctx.arc(d.x + d.w/2, d.y + d.h/2, r, 0, 2 * Math.PI, true);
+      ctx.stroke();
+      ctx.closePath();
+      
+      // Image
+      ctx.drawImage(i, d.x + d.w/2 - sr, d.y + d.h/2 - sr, 2 * sr, 2 * sr);
       
       ctx.restore();
     }
@@ -716,7 +781,35 @@
     
   }
   
+  function initImages(dim) {
+    var
+      image = new Item(ctx),
+      maxR = 50 * scale;
+      
+    image.setSource('images/horn.png');
+    image.setRadius(1);
+    image.setOrigin(0, 0);
+    image.addUpdate(function() {
+      var
+        r = this.getRadius();
+        
+      if (r > maxR) {
+        this.setRadius(maxR);
+        this.clearUpdates();
+      }
+      
+      this.setRadius(r + scale);
+      
+    });
+    
+    renderLayer1.push(image);
+    resize(); // this is a hack - need to refactor
+  }
+  
   function initAbout() {
+    var
+      r1length = renderLayer1.length,
+      r2length = renderLayer2.length;
     
     renderLayer1.forEach(function(object) {
       object.clearUpdates();
@@ -727,15 +820,20 @@
           
         this.setOpacity(o);
         
-        return (o === 0) ? true : false;
+        if (o === 0) {
+          
+          r1length--;
+          
+          if (r1length === 0) {
+            renderLayer1 = [];
+          }
+          
+          return true;
+        }
       });
     });
     
     renderLayer2.forEach(function(object) {
-      //object.clearUpdates();
-      var
-        dd = 2 * (Math.round(Math.random()) - .5 ); 
-      
       object.addUpdate(function() {
         var
           origin = this.getOrigin(),
@@ -744,26 +842,47 @@
           dy = origin.y - .5,
           a = Math.atan(dy/dx),
           dist2 = dx * dx + dy * dy,
-          turnSpeed = UPDATE_STEP_MS * Math.PI / 50;
+          maxV = .0007;
+          
+        // TODO: add transition between current direction and destination direction
         
-        // Stop moving
-        if (dist2 < .00005) {
-          this.setOrigin(.5, .5);
+        // Star has reached its destination
+        if (dist2 < .00001) {
           this.clearUpdates();
-          return;
+          this.setOrigin(.5, .5);
+          
+          this.addUpdate(function() {
+            var
+              r = this.getRadius();
+            
+            this.setRadius(r - 1);
+            
+            if (r < 0) {
+              this.clearUpdates();
+              
+              r2length--;
+              
+              if (r2length === 0) {
+                renderLayer2 = [];
+                initImages();
+              }
+            }
+          });
         }
         
+        // Arctan angle fix
         if (dx < 0) { a += Math.PI; }
         
+        // Set direction to destination
         this.setDirection(a);
         
-        if (vel < .0007) {
-          vel += UPDATE_STEP_MS * (.0007 - vel) / 1000;
+        // Accelerate
+        if (vel < maxV) {
+          vel += UPDATE_STEP_MS * (maxV - vel) / 1000;
           this.setVelocity(vel);
         } 
       });
     });
-    
   }
   
   
@@ -827,7 +946,7 @@
       star = new Star(ctx);
         
       star.setOrigin(x, y);
-      star.setLocation(x, y);
+      //star.setLocation(x, y);
       star.setRadius(r);
       star.setVelocity(v / 100000);
     
@@ -908,7 +1027,6 @@
         t = Date.now();
       
       // Uses the Sketch object's context
-      
       this.addUpdate(function() {
         // Fade in effect
         this.setSketchColor(getColorMix([200, 200, 200], [39,87,170], t, duration));
@@ -943,36 +1061,7 @@
         return false;
       });
     });
-      /*
-      this.update = function() {
-        
-        // Fade in effect
-        this.setSketchColor(getColorMix([200, 200, 200], [39,87,170], t, duration));
-        this.setFillColor(getColorMix([0,18,51], [39,87,170], t, duration));
-        
-        
-        if (Date.now() > t + duration) {
-          t = Date.now();
-          this.update = function() {
-            
-            // Grow effect
-            duration = 700;
-            scale = 1;
-            scale += .1 * Math.sin((Math.PI / 2) * (Date.now() - t) / duration);
-            this.setScale(scale, scale);
-            
-            if (Date.now() > t + duration) {
-              // Finished animating
-              this.update = function() {};
-              initLinks();
-              resize();
-              renderLayer1.push(about);
-              renderLayer1.push(portfolio);
-            }
-          }
-        }
-      }
-      */
+    
     renderLayer1.push(doodle);
   }
   
@@ -1081,6 +1170,7 @@
     renderLayer2.forEach(function(object) {
       object.render(ctx);
     });
+    
     renderLayer1.forEach(function(object) {
       object.render(ctx);
     });
@@ -1094,7 +1184,7 @@
     var
       x = e.clientX,
       y = e.clientY;
-      
+    
     if (about) { about.hover(x, y); }
     if (portfolio) { portfolio.hover(x, y); }
   }

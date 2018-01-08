@@ -140,6 +140,7 @@
       let
         rmq = [];
       
+      // Find completed update functions
       updateList.forEach(function(func, ind) {
         if (func()) {
           rmq.push(ind);
@@ -147,6 +148,7 @@
       });
       
       if (rmq.length > 0) {
+        // Reverse sort: highest index to lowest
         rmq.sort((a, b) => {
           if (a > b) { return 1; }
           if (a < b) { return -1; }
@@ -154,6 +156,7 @@
           return 0;
         });
         
+        // Remove finished update functions from queue
         for (let i = 0; i < rmq.length ; i++) {
           updateList.splice(rmq[i], 1);
         }
@@ -491,17 +494,16 @@
   
   function Item(ctx) {
     var
+      a = 0,
+      d = 0,
       r = 20,
       i = new Image(),
-      color = {};
+      color;
     
-    color.rest = {
+    color = {
       background: 'rgba(225,225,225,.5)',
-      outline: 'red'
-    }
-    color.hover = {
-      background: 'rgba(235, 100, 100, .5)',
-      outline: 'blue'
+      outline: 'rgba(100, 149, 214, 1)',
+      outlineBorder: 'rgba(80, 119, 170, .9)'
     }
     
     Hitbox.call(this);
@@ -510,40 +512,63 @@
       r = radius;
     }
     
+    this.setAngle = function(angle) {
+      a = angle;
+    }
+    
+    this.setDistance = function(distance) {
+      d = distance;
+    }
+    
+    this.getAngle = function() { return a; }
+    
+    this.getDistance = function() { return d; }
+    
     this.getRadius = function() { return r; }
     
     this.setSource = function(source) {
       i.src = source;
     }
     
-    this.render = function() {
+    this.render = function(s) {
       var
-        o = this.getOrigin(),
-        d = this.getLayerDimensions(),
-        sr = -.8 * r;
+        dim = this.getLayerDimensions(),
+        radius = r * s,
+        sr = -.8 * radius;
+      
+      if (!s) { s = 1; }
       
       ctx.save();
       
-      ctx.translate(o.x, o.y);
+      //ctx.translate(o.x, o.y);
+      ctx.translate(1.4 * s * d * Math.cos(a), s * d * Math.sin(a));
       
-      ctx.fillStyle = color.rest.background;
-      ctx.strokeStyle = color.rest.outline;
-      ctx.lineWidth = 3;
+      ctx.fillStyle = color.background;
+      ctx.strokeStyle = color.outlineBorder;
+      ctx.lineWidth = 6 * s;
       
       // Background
       ctx.beginPath();
-      ctx.arc(d.x + d.w/2, d.y + d.h/2, r, 0, 2 * Math.PI, true);
+      ctx.arc(dim.x + dim.w/2, dim.y + dim.h/2, radius, 0, 2 * Math.PI, true);
       ctx.fill();
       ctx.closePath();
       
       // Outline
       ctx.beginPath();
-      ctx.arc(d.x + d.w/2, d.y + d.h/2, r, 0, 2 * Math.PI, true);
+      ctx.arc(dim.x + dim.w/2, dim.y + dim.h/2, radius, 0, 2 * Math.PI, true);
+      ctx.stroke();
+      ctx.closePath();
+      
+      ctx.strokeStyle = color.outline;
+      ctx.lineWidth = 3 * s;
+      
+      ctx.beginPath();
+      ctx.arc(dim.x + dim.w/2, dim.y + dim.h/2, radius, 0, 2 * Math.PI, true);
       ctx.stroke();
       ctx.closePath();
       
       // Image
-      ctx.drawImage(i, d.x + d.w/2 - sr, d.y + d.h/2 - sr, 2 * sr, 2 * sr);
+      ctx.drawImage(i, dim.x + dim.w/2 - sr, dim.y + dim.h/2 - sr, 2 * sr, 2 * sr);
       
       ctx.restore();
     }
@@ -551,7 +576,7 @@
   }
   
   // An object simulating a drawn sketch
-  function Sketch() {
+  function Sketch(ctx) {
     var
       finishedSketching = false,
       sketchColor = 'rgb(200, 200, 200)',
@@ -705,7 +730,7 @@
     
     this.popCoords = function() { coords.pop(); }
     
-    this.render = function(ctx) {
+    this.render = function() {
       var
         f = fillBoxCoords,
         origin = this.getOrigin(),
@@ -784,26 +809,61 @@
   function initImages(dim) {
     var
       image = new Item(ctx),
-      maxR = 50 * scale;
-      
-    image.setSource('images/horn.png');
-    image.setRadius(1);
-    image.setOrigin(0, 0);
-    image.addUpdate(function() {
-      var
-        r = this.getRadius();
-        
-      if (r > maxR) {
-        this.setRadius(maxR);
-        this.clearUpdates();
-      }
-      
-      this.setRadius(r + scale);
-      
-    });
+      maxR = 50,
+      maxD = 450,
+      inc = maxR / 50,
+      delay = 20,
+      sources = ['horn', 'microscope', 'dog', 'web'];
     
-    renderLayer1.push(image);
-    resize(); // this is a hack - need to refactor
+    
+    for (let i = 0; i < sources.length; i++) {
+      image = new Item(ctx);
+      image.setSource('images/'+sources[i]+'.png');
+      image.setRadius(0);
+      image.setOrigin(0, 0);
+      image.setAngle(0 - Math.PI * 2 * i / sources.length);
+      image.delay = i * delay;
+      image.addUpdate(function() {
+        this.delay--;
+        
+        if (this.delay <= 0) {
+          this.addUpdate(function() {
+            var
+              r = this.getRadius();
+            
+            r += inc;
+          
+            if (r > maxR) {
+              this.setRadius(maxR);
+              return true;
+            }
+          
+            this.setRadius(r);
+          });
+          this.addUpdate(function() {
+            var
+              a = this.getAngle(),
+              d = this.getDistance(),
+              maxD = 450;
+            
+            if (d < maxD) {
+              d = Math.min(maxD, d + (5 + maxD - d) / 50);
+              this.setDistance(d);
+            }
+      
+            a += .001 + .0001 * (maxD - d);
+      
+            this.setAngle(a);
+          });
+        
+          return true;
+        }
+      });
+      
+      renderLayer1.push(image);
+    }
+    
+    resize(); // this is a hack - need to refactor some things
   }
   
   function initAbout() {
@@ -959,7 +1019,7 @@
       x = [-0.17, 0, 0.17],
       xt = .05,
       yt = xt * ASPECT,
-      doodle = new Sketch();
+      doodle = new Sketch(ctx);
     
     doodle.setFillBoxCoords([
       [x[0] - xt, y[0] - yt, x[2] + xt, y[0]],
@@ -1022,7 +1082,7 @@
     
     doodle.setCallback(function() {
       var
-        scale,
+        s,
         duration = 1000,
         t = Date.now();
       
@@ -1039,9 +1099,9 @@
             
             // Grow effect
             duration = 700;
-            scale = 1;
-            scale += .1 * Math.sin((Math.PI / 2) * (Date.now() - t) / duration);
-            this.setScale(scale, scale);
+            s = 1;
+            s += .1 * Math.sin((Math.PI / 2) * (Date.now() - t) / duration);
+            this.setScale(s, s);
             
             if (Date.now() > t + duration) {
               // Finished animating
@@ -1168,11 +1228,11 @@
     
     clear();
     renderLayer2.forEach(function(object) {
-      object.render(ctx);
+      object.render(scale);
     });
     
     renderLayer1.forEach(function(object) {
-      object.render(ctx);
+      object.render(scale);
     });
   }
   

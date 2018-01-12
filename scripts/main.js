@@ -670,9 +670,8 @@
         dim = this.getLayerDimensions(),
         w = 2 * s,
         padding = 20 * s,
-        d,
         maxR = this.getMaxRadius() * s,
-        fontSize1 = 12 + 16 * r / maxR,
+        fontSize1 = (14 + 16 * r / maxR) * s,
         fontSize2 = fontSize1 * .8,
         color = [255, 255, 255]; //[r, g, b]
       

@@ -688,8 +688,8 @@
           ctx.lineTo(d * Math.cos(a), d * Math.sin(a));
           a += 2 * Math.PI / peaks.length;
         }
-        color[1] = 255 - (10 * j);
-        color[2] = 255 - (200 * j);
+        color[1] = 255 - parseInt(10 * j);
+        color[2] = 255 - parseInt(200 * j);
         ctx.fillStyle = 'rgba(' + color.join(',') + ',' + (1 - j) + ')';
         ctx.fill();
         ctx.closePath();

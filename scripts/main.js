@@ -2,9 +2,11 @@
   "use strict"
   
   const
+    EMAIL          = 'weaster3@gmail.com',
+    PHONE          = '(540) 557-7098',
     UPDATE_STEP_MS = 10,
     RESIZE_STEP_MS = 100,
-    ASPECT = 16/9;
+    ASPECT         = 16/9;
   
   var
     canvas       = d.createElement('canvas'),
@@ -495,6 +497,8 @@
   function Item(ctx) {
     var
       a = 0,
+      c = '',
+      alpha = 0,
       d = 0,
       r = 20,
       i = new Image(),
@@ -506,7 +510,7 @@
       outlineBorder: 'rgba(80, 119, 170, .9)'
     }
     
-    Hitbox.call(this);
+    Element.call(this);
     
     this.setRadius = function(radius) {
       r = radius;
@@ -530,11 +534,21 @@
       i.src = source;
     }
     
+    this.setCaption = function(caption) {
+      c = caption;
+    }
+    
+    this.setCaptionAlpha = function(captionAlpha) {
+      alpha = captionAlpha;
+    }
+    
     this.render = function(s) {
       var
         dim = this.getLayerDimensions(),
         radius = r * s,
-        sr = -.8 * radius;
+        sr = -.8 * radius,
+        padding = 20 * s,
+        fontsize = 24 * s;
       
       if (!s) { s = 1; }
       
@@ -570,9 +584,129 @@
       // Image
       ctx.drawImage(i, dim.x + dim.w/2 - sr, dim.y + dim.h/2 - sr, 2 * sr, 2 * sr);
       
+      // Caption
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.font = '500 ' + fontsize + 'px arial';
+      ctx.globalAlpha = alpha;
+      ctx.fillText(
+        c,
+        dim.x + dim.w/2,
+        dim.y + dim.h/2 + radius + padding
+      );
+      
       ctx.restore();
     }
     
+  }
+  
+  function HighDefStar(ctx) {
+    var
+      peaks = [],
+      maxR = 150;
+    
+    Star.call(this);
+    
+    function Peak(initialValue) {
+      var
+        change = (Math.random() + 4) / 100,
+        current = initialValue,
+        min = 5,
+        max = 8;
+        
+      this.update = function() {
+        current += change;
+        
+        if (current > max) {
+          change = (Math.random() - 2) / 100;
+          current = max;
+        }
+        
+        if (current < min) {
+          change = (Math.random() + 4) / 100;
+          current = min;
+        }
+      }
+      
+      this.getCurrent = function() {
+        return current;
+      }
+    }
+    
+    for (let i = 0; i < 50; i++) {
+      peaks.push(new Peak(Math.random() + 6));
+      //peaks.push(Math.random() + 6);
+    }
+    
+    this.getPeaks = function() {
+      return peaks;
+    }
+    
+    
+    this.clearUpdates();
+    this.addUpdate(function() {
+      var
+        p = this.getPeaks();
+        
+      p.forEach(function(peak) {
+        peak.update();
+      });
+    });
+    
+    this.setMaxRadius = function(maxRadius) {
+      maxR = maxRadius;
+    }
+    
+    this.getMaxRadius = function() {
+      return maxR;
+    }
+    
+    
+    this.render = function(s) {
+      var
+        a = 0,
+        r = this.getRadius() * s,
+        dim = this.getLayerDimensions(),
+        w = 2 * s,
+        padding = 20 * s,
+        d,
+        maxR = this.getMaxRadius() * s,
+        fontSize1 = 12 + 16 * r / maxR,
+        fontSize2 = fontSize1 * .8,
+        color = [255, 255, 255]; //[r, g, b]
+      
+      ctx.save();
+      
+      ctx.translate(dim.x + dim.w/2, dim.y + dim.h/2 -  padding);
+      ctx.fillStyle = 'white';
+      
+      for (let j = 1; j > 0; j -= .05) {
+        ctx.beginPath();
+        for (let i = 0; i < peaks.length; i++) {
+          d = r + j * w * peaks[i].getCurrent();
+          ctx.lineTo(d * Math.cos(a), d * Math.sin(a));
+          a += 2 * Math.PI / peaks.length;
+        }
+        color[1] = 255 - (10 * j);
+        color[2] = 255 - (200 * j);
+        ctx.fillStyle = 'rgba(' + color.join(',') + ',' + (1 - j) + ')';
+        ctx.fill();
+        ctx.closePath();
+      }
+      
+      ctx.globalAlpha = r / maxR;
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.font = '500 ' + fontSize1 + 'px arial';
+      ctx.fillText('Wallace Easter III', 0, r + padding + w);
+      
+      ctx.font = '500 ' + fontSize2 + 'px arial';
+      ctx.fillText(EMAIL, 0, r + padding + w + fontSize1 + padding);
+      ctx.fillText(PHONE, 0, r + padding + w + fontSize1 + padding + fontSize2 + (8 * s));
+      ctx.restore();
+    }
   }
   
   // An object simulating a drawn sketch
@@ -813,15 +947,34 @@
       maxD = 450,
       inc = maxR / 50,
       delay = 20,
-      sources = ['horn', 'microscope', 'dog', 'web'];
+      satellites;
     
+    satellites = [
+      {
+        src:'dog.png',
+        caption:'Dog Lover'
+      },
+      {
+        src:'atom.png',
+        caption:'Physics Enthusiast'
+      },
+      {
+        src:'web.png',
+        caption:'Software Developer'
+      },
+      {
+        src:'horn.png',
+        caption:'Musician'
+      }
+    ];
     
-    for (let i = 0; i < sources.length; i++) {
+    for (let i = 0; i < satellites.length; i++) {
       image = new Item(ctx);
-      image.setSource('images/'+sources[i]+'.png');
+      image.setSource('images/'+satellites[i].src);
+      image.setCaption(satellites[i].caption);
       image.setRadius(0);
       image.setOrigin(0, 0);
-      image.setAngle(0 - Math.PI * 2 * i / sources.length);
+      image.setAngle(0 - Math.PI * 2 * i / satellites.length);
       image.delay = i * delay;
       image.addUpdate(function() {
         this.delay--;
@@ -849,6 +1002,8 @@
             if (d < maxD) {
               d = Math.min(maxD, d + (5 + maxD - d) / 50);
               this.setDistance(d);
+              
+              this.setCaptionAlpha(1 - ((maxD - d)/maxD));
             }
       
             a += .001 + .0001 * (maxD - d);
@@ -862,6 +1017,22 @@
       
       renderLayer1.push(image);
     }
+    
+    image = new HighDefStar(ctx);
+    image.setRadius(0);
+    image.setMaxRadius(150);
+    image.addUpdate(function() {
+      var
+        maxR = this.getMaxRadius(),
+        r = Math.min(maxR, this.getRadius() + 1);
+      
+      this.setRadius(r) ;
+      
+      if (r >= maxR) {
+        return true;
+      }
+    });
+    renderLayer1.push(image);
     
     resize(); // this is a hack - need to refactor some things
   }
@@ -903,10 +1074,14 @@
           a = Math.atan(dy/dx),
           dist2 = dx * dx + dy * dy,
           maxV = .0007;
-          
+        
+        // Arctan angle fix
+        if (dx < 0) { a += Math.PI; }
+        
         // TODO: add transition between current direction and destination direction
         
         // Star has reached its destination
+        // FIXME: this is hack - need a better condition
         if (dist2 < .00001) {
           this.clearUpdates();
           this.setOrigin(.5, .5);
@@ -930,8 +1105,7 @@
           });
         }
         
-        // Arctan angle fix
-        if (dx < 0) { a += Math.PI; }
+        
         
         // Set direction to destination
         this.setDirection(a);
